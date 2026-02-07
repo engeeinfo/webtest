@@ -2,7 +2,6 @@ import { ChefHat, LogOut, Plus, RefreshCw, Trash2, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-<<<<<<< HEAD
 =======
 import { CopyrightFooter } from "../components/CopyrightFooter";
 >>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
@@ -873,9 +872,6 @@ export function AdminDashboard() {
         table={selectedTable}
       />
 <<<<<<< HEAD
-=======
-      <CopyrightFooter />
->>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
     </div>
   );
 }

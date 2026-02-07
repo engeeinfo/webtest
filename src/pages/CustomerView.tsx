@@ -1,7 +1,6 @@
 import { LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-<<<<<<< HEAD
 =======
 import { CopyrightFooter } from "../components/CopyrightFooter";
 >>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
@@ -253,9 +252,6 @@ export function CustomerView() {
         table={selectedTable}
       />
 <<<<<<< HEAD
-=======
-      <CopyrightFooter />
->>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
     </div>
   );
 }

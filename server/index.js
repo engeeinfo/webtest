@@ -1147,11 +1147,7 @@ app.get("/make-server-21f56fa4/health", (c) => {
   return c.json({ status: "ok" });
 });
 
-<<<<<<< HEAD
 const port = 3001;
-=======
-const port = 8080;
->>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
 console.log(`Server is running on port ${port}`);
 
 serve({

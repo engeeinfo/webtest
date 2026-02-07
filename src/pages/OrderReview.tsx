@@ -1,5 +1,4 @@
 import {
-<<<<<<< HEAD
   ArrowLeft,
   CheckCircle,
   Clock,
@@ -9,22 +8,10 @@ import {
   QrCode,
   Trash2,
   X,
-=======
-    ArrowLeft,
-    CheckCircle,
-    Clock,
-    CreditCard,
-    Minus,
-    Plus,
-    QrCode,
-    Trash2,
-    X,
->>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-<<<<<<< HEAD
 =======
 import { CopyrightFooter } from "../components/CopyrightFooter";
 >>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
@@ -626,9 +613,6 @@ export function OrderReview() {
         </div>
       )}
 <<<<<<< HEAD
-=======
-      <CopyrightFooter />
->>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
     </div>
   );
 }

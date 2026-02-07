@@ -1,5 +1,4 @@
 import {
-<<<<<<< HEAD
   ArrowLeft,
   CheckCircle2,
   Circle,
@@ -10,19 +9,6 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-=======
-    ArrowLeft,
-    CheckCircle2,
-    Circle,
-    Clock,
-    LogOut,
-    RefreshCw,
-    Trash2,
-} from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { CopyrightFooter } from "../components/CopyrightFooter";
->>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
 import { useAuth } from "../contexts/AuthContext";
 import { API_BASE, publicAnonKey } from "../utils/supabase/info";
 
