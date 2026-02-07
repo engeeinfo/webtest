@@ -4,6 +4,7 @@ export const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || "";
 export const publicAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
 export const SUPABASE_URL =
-  import.meta.env.VITE_SUPABASE_URL || "https://webtest-backend.onrender.com";
+  import.meta.env.VITE_SUPABASE_URL || "https://cpoqycbsgufjjcoopbyn.supabase.co";
 export const API_BASE =
-  import.meta.env.VITE_API_BASE || "https://webtest-backend.onrender.com/make-server-21f56fa4";
+  import.meta.env.VITE_API_BASE ||
+  "https://cpoqycbsgufjjcoopbyn.supabase.co/rest/v1";

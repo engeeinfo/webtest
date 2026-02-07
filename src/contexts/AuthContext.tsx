@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { API_BASE, publicAnonKey } from "../utils/supabase/info";
+import { supabase } from "../lib/supabase";
 
 interface User {
   email: string;
@@ -79,104 +80,75 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for existing session
-    try {
-      const storedUser = storage.getItem("user");
-      if (storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-        // Clean up legacy guest sessions from localStorage
-        if (parsedUser.email === "guest@example.com") {
-          storage.removeItem("user");
-          sessionStorage.setItem("user", storedUser);
-        }
-        setUser(parsedUser);
-      } else {
-        // Check session storage for guest session
-        const sessionUser = sessionStorage.getItem("user");
-        if (sessionUser) {
-          setUser(JSON.parse(sessionUser));
-        }
+    // Initialize Supabase session
+    const initSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.user) {
+        // Map Supabase user to App user
+        setUser({
+          id: session.user.id,
+          email: session.user.email || "",
+          name: session.user.user_metadata?.name || "User",
+          role: session.user.user_metadata?.role || "customer",
+        });
       }
-    } catch (error) {
-      console.error("Error loading user from storage:", error);
-    }
-    setLoading(false);
+      setLoading(false);
+    };
+
+    initSession();
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email || "",
+          name: session.user.user_metadata?.name || "User",
+          role: session.user.user_metadata?.role || "customer",
+        });
+        // Sync to local storage for legacy compatibility if needed
+        storage.setItem(
+          "user",
+          JSON.stringify({
+            id: session.user.id,
+            email: session.user.email || "",
+            name: session.user.user_metadata?.name || "User",
+            role: session.user.user_metadata?.role || "customer",
+          })
+        );
+      } else {
+        setUser(null);
+        storage.removeItem("user");
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email: string, password: string): Promise<void> => {
-    // Check for hardcoded credentials first to bypass API if server is down
-    if (email === "admin@restaurant.com" && password === "admin123") {
-      const adminUser: User = {
-        id: "admin-1",
-        email: email,
-        name: "Admin",
-        role: "admin",
-      };
-      storage.setItem("user", JSON.stringify(adminUser));
-      setUser(adminUser);
-      return;
+    // Attempt Supabase login
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      console.error("Supabase login error:", error);
+      throw new Error(error.message);
     }
 
-    if (email === "kitchen@restaurant.com" && password === "kitchen123") {
-      const kitchenUser: User = {
-        id: "kitchen-1",
-        email: email,
-        name: "Kitchen Staff",
-        role: "kitchen",
-      };
-      storage.setItem("user", JSON.stringify(kitchenUser));
-      setUser(kitchenUser);
-      return;
-    }
+    // Auth state change listener will update the user state
+  };
 
-    if (email === "waiter@restaurant.com" && password === "waiter123") {
-      const waiterUser: User = {
-        id: "waiter-1",
-        email: email,
-        name: "Waiter",
-        role: "waiter",
-      };
-      storage.setItem("user", JSON.stringify(waiterUser));
-      setUser(waiterUser);
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_BASE}/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${publicAnonKey}`,
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      console.log("Login response status:", response.status);
-
-      if (!response.ok) {
-        const error = await response.text();
-        console.error("Login failed with error:", error);
-        throw new Error(error || "Login failed");
-      }
-
-      const userData = await response.json();
-      console.log("Login successful, user data:", userData);
-
-      // Save to storage first
-      try {
-        storage.setItem("user", JSON.stringify(userData));
-        console.log("User saved to storage");
-      } catch (error) {
-        console.error("Error saving user to storage:", error);
-      }
-
-      // Then update state (this will trigger navigation in Login component)
-      setUser(userData);
-      console.log("User state updated");
-    } catch (error) {
-      console.error("Login error:", error);
-      throw error;
-    }
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    storage.removeItem("user");
+    sessionStorage.removeItem("user");
   };
 
   const guestLogin = () => {
@@ -186,21 +158,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       name: "Guest",
       role: "customer",
     };
-    setUser(guestUser);
-    // Use sessionStorage for guest users so they are logged out when tab closes
-    sessionStorage.setItem("user", JSON.stringify(guestUser));
-    // Do not save to persistent storage
-    // storage.setItem("user", JSON.stringify(guestUser));
-  };
 
-  const logout = () => {
-    setUser(null);
-    try {
-      storage.removeItem("user");
-      sessionStorage.removeItem("user");
-    } catch (error) {
-      console.error("Error removing user from storage:", error);
-    }
+    // For guest login, we don't necessarily need Supabase auth unless we want anonymous users
+    // Keeping local state for guest for now
+    setUser(guestUser);
+    sessionStorage.setItem("user", JSON.stringify(guestUser));
   };
 
   return (

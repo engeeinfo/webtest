@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { MenuManagement } from "../components/MenuManagement";
 import { TableDetailsModal } from "../components/TableDetailsModal";
 import { useAuth } from "../contexts/AuthContext";
-import { API_BASE, publicAnonKey } from "../utils/supabase/info";
+import { supabase } from "../lib/supabase";
 
 interface Table {
   id: string;
@@ -38,18 +38,27 @@ export function AdminDashboard() {
 
   const fetchTables = async () => {
     try {
-      const response = await fetch(`${API_BASE}/tables`, {
-        headers: {
-          Authorization: `Bearer ${publicAnonKey}`,
-        },
-      });
+      const { data, error } = await supabase
+        .from('tables')
+        .select('*')
+        .order('number', { ascending: true });
 
-      if (response.ok) {
-        const data = await response.json();
-        setTables(data);
+      if (error) throw error;
+
+      if (data) {
+        // Map Supabase snake_case to frontend camelCase if necessary
+        const mappedTables: Table[] = data.map((t: any) => ({
+          id: t.id,
+          number: t.number,
+          status: t.status,
+          capacity: t.capacity,
+          sessionId: t.session_id || t.sessionId // Handle both cases
+        }));
+        setTables(mappedTables);
       }
     } catch (error) {
       console.error("Error fetching tables:", error);
+      toast.error("Failed to fetch tables from database");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -71,16 +80,12 @@ export function AdminDashboard() {
 
   const handleCompleteSession = async (tableId: string) => {
     try {
-      const response = await fetch(`${API_BASE}/complete-session`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${publicAnonKey}`,
-        },
-        body: JSON.stringify({ tableId }),
-      });
+      const { error } = await supabase
+        .from('tables')
+        .update({ status: 'empty', session_id: null })
+        .eq('id', tableId);
 
-      if (response.ok) {
+      if (!error) {
         fetchTables();
       } else {
         alert("Failed to complete session");
@@ -93,17 +98,13 @@ export function AdminDashboard() {
 
   const handleInitTable = async (tableId: string) => {
     try {
-      const response = await fetch(`${API_BASE}/init-session`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${publicAnonKey}`,
-        },
-        body: JSON.stringify({ tableId }),
-      });
+      const sessionId = `sess_${Date.now()}`;
+      const { error } = await supabase
+        .from('tables')
+        .update({ status: 'occupied', session_id: sessionId })
+        .eq('id', tableId);
 
-      if (response.ok) {
-        const data = await response.json();
+      if (!error) {
         navigate(`/menu/${tableId}`);
       } else {
         alert("Failed to initialize table session");
@@ -119,16 +120,12 @@ export function AdminDashboard() {
 
   const handleReserveTable = async (tableId: string) => {
     try {
-      const response = await fetch(`${API_BASE}/reserve-table`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${publicAnonKey}`,
-        },
-        body: JSON.stringify({ tableId }),
-      });
+      const { error } = await supabase
+        .from('tables')
+        .update({ status: 'reserved' })
+        .eq('id', tableId);
 
-      if (response.ok) {
+      if (!error) {
         fetchTables();
       } else {
         alert("Failed to reserve table");
@@ -141,36 +138,27 @@ export function AdminDashboard() {
 
   const handleUnreserveTable = async (tableId: string) => {
     try {
-      const response = await fetch(`${API_BASE}/unreserve-table`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${publicAnonKey}`,
-        },
-        body: JSON.stringify({ tableId }),
-      });
+      const { error } = await supabase
+        .from('tables')
+        .update({ status: 'empty' })
+        .eq('id', tableId);
 
-      if (response.ok) {
+      if (!error) {
         fetchTables();
         toast.success("Table status updated");
       } else {
-        // If unreserve fails (e.g. table not reserved), try complete-session to clean up bad state
-        console.log("Unreserve failed, trying complete-session fallback...");
-        const completeResponse = await fetch(`${API_BASE}/complete-session`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify({ tableId }),
-        });
+        // If unreserve fails, try fallback
+        console.log("Unreserve failed, trying fallback...");
+        const { error: fallbackError } = await supabase
+          .from('tables')
+          .update({ status: 'empty', session_id: null })
+          .eq('id', tableId);
 
-        if (completeResponse.ok) {
+        if (!fallbackError) {
           fetchTables();
           toast.success("Table status reset (fallback)");
         } else {
-          // Last resort: Just force remove and add? No, simpler to just alert.
-          alert("Failed to reset table status. Check server logs.");
+          alert("Failed to reset table status.");
         }
       }
     } catch (error) {
@@ -196,27 +184,20 @@ export function AdminDashboard() {
     e.preventDefault();
     setAddingTable(true);
     try {
-      const response = await fetch(`${API_BASE}/add-table`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${publicAnonKey}`,
-        },
-        body: JSON.stringify({
-          number: parseInt(newTableNumber),
-          capacity: parseInt(newTableCapacity),
-        }),
-      });
+      const { error } = await supabase.from('tables').insert([{
+        number: parseInt(newTableNumber),
+        capacity: parseInt(newTableCapacity),
+        status: 'empty'
+      }]);
 
-      if (response.ok) {
+      if (!error) {
         setNewTableNumber("");
         setNewTableCapacity("");
         setShowAddTableForm(false);
         fetchTables();
         alert("Table added successfully!");
       } else {
-        const errorText = await response.text();
-        alert(`Failed to add table: ${errorText}`);
+        alert(`Failed to add table: ${error.message}`);
       }
     } catch (error) {
       console.error("Error adding table:", error);
@@ -230,21 +211,13 @@ export function AdminDashboard() {
     if (!confirm("Are you sure you want to remove this table?")) return;
 
     try {
-      const response = await fetch(`${API_BASE}/remove-table`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${publicAnonKey}`,
-        },
-        body: JSON.stringify({ tableId }),
-      });
+      const { error } = await supabase.from('tables').delete().eq('id', tableId);
 
-      if (response.ok) {
+      if (!error) {
         fetchTables();
         alert("Table removed successfully!");
       } else {
-        const errorText = await response.text();
-        alert(`Failed to remove table: ${errorText}`);
+        alert(`Failed to remove table: ${error.message}`);
       }
     } catch (error) {
       console.error("Error removing table:", error);
