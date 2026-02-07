@@ -2,6 +2,7 @@
   "name": "3d-web-demo",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://engeeinfo.github.io/webtest/",
   "dependencies": {
     "@hono/node-server": "^1.19.9",
     "@jsr/supabase__supabase-js": "^2.49.8",
@@ -56,11 +57,14 @@
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react-swc": "^3.10.2",
+    "gh-pages": "^6.3.0",
     "vite": "6.3.5"
   },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "server": "node server/index.js"
+    "server": "node server/index.js",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build"
   }
 }
