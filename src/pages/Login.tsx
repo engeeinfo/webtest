@@ -50,7 +50,6 @@ export function Login() {
         admin: { email: "admin@restaurant.com", password: "admin123" },
         kitchen: { email: "kitchen@restaurant.com", password: "kitchen123" },
         waiter: { email: "waiter@restaurant.com", password: "waiter123" },
-        // customer removed from credentials list as it now uses guestLogin
       };
 
     const cred = credentials[role];
@@ -66,7 +65,13 @@ export function Login() {
       // Navigation will happen via useEffect above
     } catch (err: any) {
       console.error("Quick login failed:", err);
-      setError(err.message || "Login failed");
+      if (err.message.includes("Email not confirmed")) {
+         setError("This demo account exists but the email address needs to be confirmed in the database dashboard (or 'Confirm Email' disabled in settings).");
+      } else if (err.message.includes("Invalid login credentials")) {
+         setError("Demo account does not exist in the database. Please create a user with email " + cred.email + " and password " + cred.password + " in your Supabase project.");
+      } else {
+         setError(err.message || "Login failed");
+      }
       setLoading(false);
     }
   };
