@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { API_BASE, publicAnonKey } from "../utils/supabase/info";
 import { supabase } from "../lib/supabase";
 
 interface User {
@@ -104,21 +103,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
+        // Fallback role determination based on email if metadata doesn't have it
+        let role = session.user.user_metadata?.role;
+        const email = session.user.email || "";
+
+        if (!role) {
+          if (email.includes("admin")) role = "admin";
+          else if (email.includes("kitchen")) role = "kitchen";
+          else if (email.includes("waiter")) role = "waiter";
+          else role = "customer";
+        }
+
         setUser({
           id: session.user.id,
-          email: session.user.email || "",
+          email: email,
           name: session.user.user_metadata?.name || "User",
-          role: session.user.user_metadata?.role || "customer",
+          role: role,
         });
         // Sync to local storage for legacy compatibility if needed
         storage.setItem(
           "user",
           JSON.stringify({
             id: session.user.id,
-            email: session.user.email || "",
+            email: email,
             name: session.user.user_metadata?.name || "User",
-            role: session.user.user_metadata?.role || "customer",
-          })
+            role: role,
+          }),
         );
       } else {
         setUser(null);
