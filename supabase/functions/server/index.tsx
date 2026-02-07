@@ -1,13 +1,12 @@
-const { serve } = require("@hono/node-server");
-const { Hono } = require("hono");
-const { cors } = require("hono/cors");
-const { logger } = require("hono/logger");
-const kv = require("./kv_store.js");
-
+// @ts-nocheck
+import { Hono } from "npm:hono";
+import { cors } from "npm:hono/cors";
+import { logger } from "npm:hono/logger";
+import * as kv from "./kv_store.tsx";
 const app = new Hono();
 
 // Enable logger
-app.use("*", logger());
+app.use("*", logger(console.log));
 
 // Enable CORS for all routes and methods
 app.use(
@@ -20,11 +19,6 @@ app.use(
     maxAge: 600,
   }),
 );
-
-// Root route to check if server is running
-app.get("/", (c) => {
-  return c.text("Restaurant API Server is Running!");
-});
 
 // ==================== INITIALIZATION ====================
 
@@ -56,15 +50,8 @@ async function initializeDemoData() {
           id: "user-waiter-1",
           email: "waiter@restaurant.com",
           password: "waiter123",
-          role: "waiter",
-          name: "Waiter",
-        },
-        {
-          id: "user-customer-1",
-          email: "customer@restaurant.com",
-          password: "customer123",
           role: "customer",
-          name: "Valued Customer",
+          name: "Waiter",
         },
       ];
 
@@ -254,7 +241,7 @@ async function initializeDemoData() {
   }
 }
 
-// Initialize on startup
+// Initialize on startup (async, don't block server start)
 initializeDemoData().catch((err) => console.error("Init error:", err));
 
 // ==================== AUTH ENDPOINTS ====================
@@ -654,84 +641,37 @@ app.post("/make-server-21f56fa4/create-order", async (c) => {
     const { tableId, items } = await c.req.json();
 
     const table = await kv.get(`table:${tableId}`);
-    if (!table) {
-      return c.text("Table not found", 404);
+    if (!table || !table.sessionId) {
+      return c.text("No active session for this table", 400);
     }
 
-    let session;
-    let sessionId;
+    const session = await kv.get(`session:${table.sessionId}`);
+    if (!session) {
+      return c.text("Session not found", 404);
+    }
 
-    // If table has no session (or is empty), create one
-    if (!table.sessionId || table.status === "empty") {
-      if (table.status !== "empty" && table.status !== "reserved") {
-        return c.text("Table is not available for new order", 400);
-      }
-
-      // Initialize new session
-      sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      session = {
-        id: sessionId,
-        tableId: tableId,
-        tableNumber: table.number,
-        items: [],
-        totalAmount: 0,
-        paymentStatus: "pending",
-        createdAt: new Date().toISOString(),
-      };
-
-      // Update table status
-      table.status = "occupied";
-      table.sessionId = sessionId;
-      await kv.set(`table:${tableId}`, table);
-    } else {
-      // Use existing session
-      session = await kv.get(`session:${table.sessionId}`);
-      sessionId = table.sessionId;
-
-      if (!session) {
-        // Recovery if session is missing but table points to it
-        sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        session = {
-          id: sessionId,
-          tableId: tableId,
-          tableNumber: table.number,
-          items: [],
-          totalAmount: 0,
-          paymentStatus: "pending",
-          createdAt: new Date().toISOString(),
-        };
-        table.status = "occupied";
-        table.sessionId = sessionId;
-        await kv.set(`table:${tableId}`, table);
-      }
+    if (session.paymentStatus === "success") {
+      return c.text("Cannot add items to paid order", 400);
     }
 
     // Add items to session with unique IDs and initial status
-    const orderItems = items.map((item) => ({
+    const newItems = items.map((item: any) => ({
       ...item,
       id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       status: "pending",
-      sent: false,
     }));
 
-    // If appending to existing session
-    if (session.items && session.items.length > 0) {
-      // Mark existing items as sent if the session was previously flagged as sent
-      if (session.orderSent) {
-        session.items = session.items.map((i) => ({ ...i, sent: true }));
-      }
-      session.items = [...session.items, ...orderItems];
-    } else {
-      session.items = orderItems;
-    }
+    // Append new items to existing items
+    session.items = [...session.items, ...newItems];
 
-    // Reset orderSent flag specifically for new items
-    session.orderSent = false;
-
+    // Recalculate total amount
     session.totalAmount = session.items.reduce(
-      (sum, item) => sum + item.price * item.quantity,
+      (sum: number, item: any) => sum + item.price * item.quantity,
       0,
     );
+
+    // Reset orderSent flag so it can be sent to kitchen again
+    session.orderSent = false;
 
     await kv.set(`session:${session.id}`, session);
 
@@ -772,17 +712,26 @@ app.post("/make-server-21f56fa4/update-order-item", async (c) => {
     }
 
     // Update item quantity
-    session.items = session.items.map((item) =>
+    session.items = session.items.map((item: any) =>
       item.id === itemId ? { ...item, quantity } : item,
     );
 
     // Recalculate total
     session.totalAmount = session.items.reduce(
-      (sum, item) => sum + item.price * item.quantity,
+      (sum: number, item: any) => sum + item.price * item.quantity,
       0,
     );
 
     await kv.set(`session:${sessionId}`, session);
+
+    // Sync with kitchen order if it exists
+    const kitchenOrder = await kv.get(`kitchen:${sessionId}`);
+    if (kitchenOrder) {
+      kitchenOrder.items = kitchenOrder.items.map((item: any) =>
+        item.id === itemId ? { ...item, quantity } : item,
+      );
+      await kv.set(`kitchen:${sessionId}`, kitchenOrder);
+    }
 
     return c.json({ success: true });
   } catch (error) {
@@ -805,15 +754,26 @@ app.post("/make-server-21f56fa4/remove-order-item", async (c) => {
     }
 
     // Remove item
-    session.items = session.items.filter((item) => item.id !== itemId);
+    session.items = session.items.filter((item: any) => item.id !== itemId);
 
     // Recalculate total
     session.totalAmount = session.items.reduce(
-      (sum, item) => sum + item.price * item.quantity,
+      (sum: number, item: any) => sum + item.price * item.quantity,
       0,
     );
 
     await kv.set(`session:${sessionId}`, session);
+
+    // Sync with kitchen order if it exists
+    const kitchenOrder = await kv.get(`kitchen:${sessionId}`);
+    if (kitchenOrder) {
+      kitchenOrder.items = kitchenOrder.items.filter(
+        (item: any) => item.id !== itemId,
+      );
+      // If no items left, maybe delete kitchen order? But for now leaving empty is safer or delete?
+      // If we delete, kitchen might think it's done. Better to leave it empty or update.
+      await kv.set(`kitchen:${sessionId}`, kitchenOrder);
+    }
 
     return c.json({ success: true });
   } catch (error) {
@@ -829,6 +789,10 @@ app.post("/make-server-21f56fa4/process-payment", async (c) => {
     const session = await kv.get(`session:${sessionId}`);
     if (!session) {
       return c.text("Session not found", 404);
+    }
+
+    if (session.paymentStatus === "success") {
+      return c.text("Order already paid", 400);
     }
 
     // Update session payment status
@@ -882,57 +846,122 @@ app.post("/make-server-21f56fa4/confirm-order", async (c) => {
     const table = await kv.get(`table:${session.tableId}`);
     if (table) {
       table.status = "payment_pending";
-      // Ensure sessionId is preserved - redundant but safe
-      if (!table.sessionId) {
-        table.sessionId = sessionId;
-      }
       await kv.set(`table:${session.tableId}`, table);
     }
 
-    // Filter for unsent items
-    // If 'sent' property is undefined, assume false unless specifically handled elsewhere.
-    const unsentItems = session.items.filter((item) => !item.sent);
+    // Create kitchen order so kitchen can start preparing
+    const kitchenOrder = {
+      id: `kitchen-${sessionId}`,
+      sessionId: sessionId,
+      tableNumber: session.tableNumber,
+      items: session.items,
+      createdAt: new Date().toISOString(),
+    };
 
-    // Create kitchen order only if there are unsent items
-    if (unsentItems.length > 0) {
-      const kitchenOrder = {
-        id: `kitchen-${sessionId}-${Date.now()}`, // Unique ID for each batch
-        sessionId: sessionId,
-        tableNumber: session.tableNumber,
-        items: unsentItems,
-        createdAt: new Date().toISOString(),
-        isUpdate: session.items.length > unsentItems.length, // Flag as update if not first batch
-      };
+    await kv.set(`kitchen:${sessionId}`, kitchenOrder);
 
-      await kv.set(`kitchen:${sessionId}-${Date.now()}`, kitchenOrder);
-
-      // Mark items as sent
-      session.items = session.items.map((item) => ({ ...item, sent: true }));
-
-      // Mark session as having order sent
-      session.orderSent = true;
-      await kv.set(`session:${sessionId}`, session);
-    } else if (!session.orderSent) {
-      // Fallback: If no items explicitly 'sent: false' but orderSent is false, send everything (legacy/safety)
-      // This handles the case where items might not have the flag yet
-      const kitchenOrder = {
-        id: `kitchen-${sessionId}-${Date.now()}`,
-        sessionId: sessionId,
-        tableNumber: session.tableNumber,
-        items: session.items,
-        createdAt: new Date().toISOString(),
-      };
-      await kv.set(`kitchen:${sessionId}-${Date.now()}`, kitchenOrder);
-
-      session.items = session.items.map((item) => ({ ...item, sent: true }));
-      session.orderSent = true;
-      await kv.set(`session:${sessionId}`, session);
-    }
+    // Mark session as having order sent
+    session.orderSent = true;
+    await kv.set(`session:${sessionId}`, session);
 
     return c.json({ success: true, session });
   } catch (error) {
     console.error("Error confirming order:", error);
     return c.text("Error confirming order: " + error.message, 500);
+  }
+});
+
+// ==================== KITCHEN HELPER ENDPOINTS ====================
+
+app.post("/make-server-21f56fa4/delete-kitchen-order", async (c) => {
+  try {
+    const { sessionId } = await c.req.json();
+
+    console.log(`Deleting kitchen orders for session: ${sessionId}`);
+
+    // Strategy: robustly find all keys associated with this session
+    // 1. Delete standard pattern
+    await kv.delByPrefix(`kitchen:${sessionId}`);
+
+    // 2. Scan all kitchen orders to find any strays with matching sessionId in the value
+    const allEntries = await kv.getEntriesByPrefix("kitchen:");
+    const keysToDelete = [];
+
+    for (const entry of allEntries) {
+      if (entry.value.sessionId === sessionId) {
+        keysToDelete.push(entry.key);
+      }
+      // Also check specific ID format
+      if (entry.value.id === `kitchen-${sessionId}`) {
+        keysToDelete.push(entry.key);
+      }
+    }
+
+    if (keysToDelete.length > 0) {
+      console.log(
+        `Found ${keysToDelete.length} additional keys to delete:`,
+        keysToDelete,
+      );
+      await kv.mdel(keysToDelete);
+    }
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting kitchen order:", error);
+    return c.text("Error deleting kitchen order: " + error.message, 500);
+  }
+});
+
+app.post("/make-server-21f56fa4/delete-all-completed-orders", async (c) => {
+  try {
+    const allEntries = await kv.getEntriesByPrefix("kitchen:");
+
+    // Group keys by session ID
+    const sessionGroups: Record<string, { keys: string[]; allReady: boolean }> =
+      {};
+
+    for (const entry of allEntries) {
+      const order = entry.value;
+      const sid = order.sessionId || "unknown";
+
+      if (!sessionGroups[sid]) {
+        sessionGroups[sid] = { keys: [], allReady: true };
+      }
+
+      sessionGroups[sid].keys.push(entry.key);
+
+      // Check if this specific ticket is fully ready
+      const isReady =
+        order.items && order.items.every((i: any) => i.status === "ready");
+      if (!isReady) {
+        sessionGroups[sid].allReady = false;
+      }
+    }
+
+    const keysToDelete: string[] = [];
+
+    // Delete sessions where ALL items are ready
+    for (const [sid, group] of Object.entries(sessionGroups)) {
+      if (group.allReady && sid !== "unknown") {
+        keysToDelete.push(...group.keys);
+      }
+      // Handle "unknown" session tickets that are individually ready
+      else if (sid === "unknown" && group.allReady) {
+        keysToDelete.push(...group.keys);
+      }
+    }
+
+    if (keysToDelete.length > 0) {
+      console.log(
+        `Deleting ${keysToDelete.length} completed order keys (Strict Mode)`,
+      );
+      await kv.mdel(keysToDelete);
+    }
+
+    return c.json({ success: true, count: keysToDelete.length });
+  } catch (error) {
+    console.error("Error deleting all completed orders:", error);
+    return c.text("Error deleting all completed orders: " + error.message, 500);
   }
 });
 
@@ -959,9 +988,6 @@ app.post("/make-server-21f56fa4/update-item-status", async (c) => {
     // If not found, try finding by suffix if orderId doesn't match keys exactly
     // (backward compatibility or full ID passed)
     if (!order && orderId.startsWith("kitchen-")) {
-      // If orderId is "kitchen-session-xyz-123", key is likely "kitchen:session-xyz-123"
-      // The REPLACE logic above works for "kitchen-session" -> "session"
-      // BUT if the ID is complex, we might need direct access
       const rawKey = orderId.replace("kitchen-", "kitchen:");
       const directOrder = await kv.get(rawKey);
       if (directOrder) {
@@ -978,9 +1004,6 @@ app.post("/make-server-21f56fa4/update-item-status", async (c) => {
       );
       if (foundOrder) {
         order = foundOrder;
-        // Reconstruct key from ID or sessionId (assuming timestamp format)
-        // The ID in order object is usually "kitchen-{sessionId}-{timestamp}"
-        // The key is usually "kitchen:{sessionId}-{timestamp}"
         dbKey = order.id.replace("kitchen-", "kitchen:");
       }
     }
@@ -990,7 +1013,7 @@ app.post("/make-server-21f56fa4/update-item-status", async (c) => {
     }
 
     // Update item status in kitchen order
-    order.items = order.items.map((item) =>
+    order.items = order.items.map((item: any) =>
       item.id === itemId ? { ...item, status } : item,
     );
 
@@ -999,18 +1022,17 @@ app.post("/make-server-21f56fa4/update-item-status", async (c) => {
     // Also update in the session
     const session = await kv.get(`session:${order.sessionId}`);
     if (session) {
-      session.items = session.items.map((item) =>
+      session.items = session.items.map((item: any) =>
         item.id === itemId ? { ...item, status } : item,
       );
       await kv.set(`session:${order.sessionId}`, session);
     }
 
     // ALSO: Update ANY other kitchen tickets for this session that contain this item
-    // This handles the "duplicate card" issue by keeping them in sync
     const allSessionOrders = await kv.getByPrefix(`kitchen:${order.sessionId}`);
     for (const otherOrder of allSessionOrders) {
       if (otherOrder.id !== order.id) {
-        const updatedItems = otherOrder.items.map((item) =>
+        const updatedItems = otherOrder.items.map((item: any) =>
           item.id === itemId ? { ...item, status } : item,
         );
         if (JSON.stringify(updatedItems) !== JSON.stringify(otherOrder.items)) {
@@ -1034,127 +1056,100 @@ app.post("/make-server-21f56fa4/update-all-items-status", async (c) => {
   try {
     const { orderId, sessionId, status } = await c.req.json();
 
-    let lookupId = sessionId;
+    let targetSessionId = sessionId;
 
-    // If we have a sessionId, we should update ALL kitchen tickets for this session
-    if (sessionId) {
-      // Find all kitchen orders for this session
-      // Prefix search for "kitchen:" then filter would be safest, but kv might support "kitchen:{sessionIdPrefix}"?
-      // Our KV store `getByPrefix` is simple string matching.
-      // Keys are "kitchen:{sessionId}" OR "kitchen:{sessionId}-{timestamp}"
-      // querying "kitchen:{sessionId}" should find both!
-
-      const relevantOrders = await kv.getByPrefix(`kitchen:${sessionId}`);
-
-      if (relevantOrders.length === 0) {
-        return c.text("Order not found", 404);
-      }
-
-      for (const order of relevantOrders) {
-        order.items = order.items.map((item) => ({ ...item, status }));
-        // Key reconstruction:
-        const key = order.id.replace("kitchen-", "kitchen:");
-        await kv.set(key, order);
-      }
-
-      // Update Session
-      const session = await kv.get(`session:${sessionId}`);
-      if (session) {
-        session.items = session.items.map((item) => ({ ...item, status }));
-        await kv.set(`session:${sessionId}`, session);
-      }
-
-      return c.json({ success: true });
+    // If only orderId is provided, resolve the sessionId first
+    if (!targetSessionId && orderId) {
+      // Try resolving directly or via scan
+      // For updated robustness, let's just scan since we need to anyway
     }
 
-    // Fallback if only orderId provided (legacy support)
-    if (orderId) {
-      lookupId = orderId.replace("kitchen-", "");
-      // This is risky if ID has timestamps.
-      // Better to just fetch the specific key if sessionId is missing.
-      const key = orderId.replace("kitchen-", "kitchen:");
-      const order = await kv.get(key);
+    const allEntries = await kv.getEntriesByPrefix("kitchen:");
+    const updates = [];
 
-      if (!order) {
-        return c.text("Order not found", 404);
+    for (const entry of allEntries) {
+      const order = entry.value;
+      let shouldUpdate = false;
+
+      // Check if this order belongs to the target session
+      if (targetSessionId && order.sessionId === targetSessionId) {
+        shouldUpdate = true;
       }
-
-      order.items = order.items.map((item) => ({ ...item, status }));
-      await kv.set(key, order);
-
-      // Try to update session too
-      if (order.sessionId) {
-        const session = await kv.get(`session:${order.sessionId}`);
-        if (session) {
-          session.items = session.items.map((item) => ({ ...item, status }));
-          await kv.set(`session:${order.sessionId}`, session);
+      // Fallback: Check if this specific order matches orderId
+      else if (
+        orderId &&
+        (order.id === orderId || entry.key.includes(orderId))
+      ) {
+        shouldUpdate = true;
+        // Found the session ID, so we can now target others too
+        if (!targetSessionId && order.sessionId) {
+          targetSessionId = order.sessionId;
+          // Restart loop or just continue?
+          // Better to restart or just do a second pass?
+          // Simple approach: Update this one, and if we found a sessionId,
+          // we might miss previous entries in this loop.
+          // So: First pass to find sessionId if missing.
         }
       }
-      return c.json({ success: true });
+
+      if (shouldUpdate) {
+        const updatedItems = order.items.map((item: any) => ({
+          ...item,
+          status,
+        }));
+        // Only update if changed
+        if (JSON.stringify(updatedItems) !== JSON.stringify(order.items)) {
+          order.items = updatedItems;
+          updates.push({ key: entry.key, value: order });
+        }
+      }
     }
 
-    return c.text("Either sessionId or orderId is required", 400);
+    // Second pass: if we discovered a sessionId mid-stream, make sure we got everyone
+    if (targetSessionId) {
+      for (const entry of allEntries) {
+        if (entry.value.sessionId === targetSessionId) {
+          // Check if already in updates
+          const existingUpdate = updates.find((u) => u.key === entry.key);
+          if (!existingUpdate) {
+            const updatedItems = entry.value.items.map((item: any) => ({
+              ...item,
+              status,
+            }));
+            if (
+              JSON.stringify(updatedItems) !== JSON.stringify(entry.value.items)
+            ) {
+              entry.value.items = updatedItems;
+              updates.push({ key: entry.key, value: entry.value });
+            }
+          }
+        }
+      }
+
+      // Also update Session (outside kitchen keys)
+      const session = await kv.get(`session:${targetSessionId}`);
+      if (session) {
+        session.items = session.items.map((item: any) => ({ ...item, status }));
+        await kv.set(`session:${targetSessionId}`, session);
+      }
+    }
+
+    // Apply strict updates
+    for (const update of updates) {
+      await kv.set(update.key, update.value);
+    }
+
+    return c.json({ success: true, updated: updates.length });
   } catch (error) {
     console.error("Error updating all items status:", error);
     return c.text("Error updating all items status: " + error.message, 500);
   }
 });
 
-// ==================== KITCHEN HELPER ENDPOINTS ====================
+// ==================== Health Check ====================
 
-app.post("/make-server-21f56fa4/delete-kitchen-order", async (c) => {
-  try {
-    const { sessionId } = await c.req.json();
-
-    // Find all orders for this session
-    const orders = await kv.getByPrefix(`kitchen:${sessionId}`);
-
-    for (const order of orders) {
-      const key = order.id.replace("kitchen-", "kitchen:");
-      await kv.del(key);
-    }
-
-    // Fallback
-    await kv.del(`kitchen:${sessionId}`);
-
-    return c.json({ success: true });
-  } catch (error) {
-    console.error("Error deleting kitchen order:", error);
-    return c.text("Error deleting kitchen order: " + error.message, 500);
-  }
-});
-
-app.post("/make-server-21f56fa4/delete-all-completed-orders", async (c) => {
-  try {
-    const orders = await kv.getByPrefix("kitchen:");
-    for (const order of orders) {
-      if (order.items.every((i) => i.status === "ready")) {
-        const key = order.id.replace("kitchen-", "kitchen:");
-        await kv.del(key);
-      }
-    }
-    return c.json({ success: true });
-  } catch (error) {
-    console.error("Error deleting all completed orders:", error);
-    return c.text("Error deleting all completed orders: " + error.message, 500);
-  }
-});
-
-// ==================== HEALTH CHECK ====================
-
-// Health check endpoint
 app.get("/make-server-21f56fa4/health", (c) => {
   return c.json({ status: "ok" });
 });
 
-<<<<<<< HEAD
-const port = 3001;
-=======
-const port = 8080;
->>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
-console.log(`Server is running on port ${port}`);
-
-serve({
-  fetch: app.fetch,
-  port,
-});
+Deno.serve(app.fetch);

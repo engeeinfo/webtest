@@ -1,6 +1,10 @@
 import { ArrowLeft, Minus, Plus, Search, ShoppingCart } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+<<<<<<< HEAD
+=======
+import { CopyrightFooter } from "../components/CopyrightFooter";
+>>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
 import { API_BASE, publicAnonKey } from "../utils/supabase/info";
 
 interface MenuItem {
@@ -307,6 +311,10 @@ export function MenuView() {
           </div>
         </div>
       )}
+<<<<<<< HEAD
+=======
+      <CopyrightFooter className="bg-white footer-padding" />
+>>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
     </div>
   );
 }

@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+=======
+import { Navigate, Route, Routes } from "react-router-dom";
+>>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { AdminDashboard } from "./pages/AdminDashboard";
@@ -38,6 +42,7 @@ function ProtectedRoute({
 
 export default function App() {
   return (
+<<<<<<< HEAD
     <BrowserRouter>
       <AuthProvider>
         <Toaster position="top-center" richColors />
@@ -93,5 +98,52 @@ export default function App() {
         </Routes>
       </AuthProvider>
     </BrowserRouter>
+=======
+    <AuthProvider>
+      <Toaster position="top-center" richColors />
+
+      <Routes>
+        <Route path="/login" element={<Login />} />
+
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/kitchen"
+          element={
+            <ProtectedRoute allowedRoles={["kitchen", "admin"]}>
+              <KitchenDisplay />
+            </ProtectedRoute>
+          }
+        />
+
+          <Route path="/customer" element={<CustomerView />} />        <Route
+          path="/menu/:tableId"
+          element={
+            <ProtectedRoute allowedRoles={["customer", "waiter", "admin"]}>
+              <MenuView />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/order/:sessionId"
+          element={
+            <ProtectedRoute allowedRoles={["customer", "waiter", "admin"]}>
+              <OrderReview />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route path="/" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </AuthProvider>
+>>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
   );
 }

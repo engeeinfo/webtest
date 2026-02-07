@@ -1,5 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+<<<<<<< HEAD
 import { API_BASE, publicAnonKey } from "../utils/supabase/info";
+=======
+import { supabase } from "../lib/supabase";
+>>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
 
 interface User {
   email: string;
@@ -18,6 +22,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+<<<<<<< HEAD
 // Safe storage that falls back to memory if localStorage is unavailable
 class SafeStorage {
   private memoryStorage: { [key: string]: string } = {};
@@ -74,11 +79,14 @@ class SafeStorage {
 
 const storage = new SafeStorage();
 
+=======
+>>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+<<<<<<< HEAD
     // Check for existing session
     try {
       const storedUser = storage.getItem("user");
@@ -140,6 +148,97 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error("Login error:", error);
       throw error;
     }
+=======
+    let mounted = true;
+
+    // Check for Supabase session
+    const initSession = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (session && mounted) {
+          // Fallback roles based on email if metadata is missing
+          let role = session.user.user_metadata?.role;
+          if (!role) {
+            if (session.user.email === "admin@restaurant.com") role = "admin";
+            else if (session.user.email === "kitchen@restaurant.com")
+              role = "kitchen";
+            else role = "customer";
+          }
+
+          setUser({
+            id: session.user.id,
+            email: session.user.email!,
+            name: session.user.user_metadata?.name || "User",
+            role: role,
+          });
+        } else if (mounted) {
+          // Fallback to guest session if no Auth session
+          const guestUser = sessionStorage.getItem("guest_user");
+          if (guestUser) {
+            setUser(JSON.parse(guestUser));
+          }
+        }
+      } catch (error) {
+        console.error("Error initializing session:", error);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    initSession();
+
+    // Listen for changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        // Fallback roles based on email if metadata is missing
+        let role = session.user.user_metadata?.role;
+        if (!role) {
+          if (session.user.email === "admin@restaurant.com") role = "admin";
+          else if (session.user.email === "kitchen@restaurant.com")
+            role = "kitchen";
+          else role = "customer";
+        }
+
+        setUser({
+          id: session.user.id,
+          email: session.user.email!,
+          name: session.user.user_metadata?.name || "User",
+          role: role,
+        });
+        // Clear guest session if real user logs in
+        sessionStorage.removeItem("guest_user");
+      } else {
+        // If logged out, check if we want to validly revert to guest or null
+        // Usually null is better on explicit logout
+        setUser(null);
+      }
+      setLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const login = async (email: string, password: string): Promise<void> => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      console.error("Login error:", error.message);
+      throw error;
+    }
+
+    console.log("Login success:", data);
+>>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
   };
 
   const guestLogin = () => {
@@ -150,6 +249,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role: "customer",
     };
     setUser(guestUser);
+<<<<<<< HEAD
     // Use sessionStorage for guest users so they are logged out when tab closes
     sessionStorage.setItem("user", JSON.stringify(guestUser));
     // Do not save to persistent storage
@@ -164,6 +264,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error("Error removing user from storage:", error);
     }
+=======
+    sessionStorage.setItem("guest_user", JSON.stringify(guestUser));
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    sessionStorage.removeItem("guest_user");
+    setUser(null);
+>>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
   };
 
   return (
