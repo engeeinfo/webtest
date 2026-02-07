@@ -8,17 +8,34 @@ export function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-=======
-  const [isSignUp, setIsSignUp] = useState(false);
->>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
   const { login, user, guestLogin } = useAuth();
   const navigate = useNavigate();
 
   // Navigate when user is set
   useEffect(() => {
     if (user) {
-<<<<<<< HEAD
       console.log("User logged in:", user);
+      if (user.role === "admin") {
+        navigate("/admin", { replace: true });
+      } else if (user.role === "kitchen") {
+        navigate("/kitchen", { replace: true });
+      } else {
+        navigate("/customer", { replace: true });
+      }
+    }
+  }, [user, navigate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      await login(email, password);
+      // Navigation will happen via useEffect above
+    } catch (err: any) {
+      console.error("Login failed:", err);
+      setError(err.message || "Login failed. Please try again.");
       setLoading(false);
     }
   };
@@ -52,6 +69,70 @@ export function Login() {
       setError(err.message || "Login failed");
       setLoading(false);
     }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl mb-4">
+            <UtensilsCrossed className="w-10 h-10 text-white" />
+          </div>
+          <h1 className="text-4xl font-bold text-white mb-2">Restaurant Hub</h1>
+          <p className="text-purple-200">Real-Time Management System</p>
+        </div>
+
+        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 shadow-2xl border border-white/20">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-white mb-2"
+              >
+                Email Address
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="Enter your email"
+                required
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-white mb-2"
+              >
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="Enter your password"
+                required
+              />
+            </div>
+
+            {error && (
+              <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-lg font-semibold hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50"
+            >
+              {loading ? "Logging in..." : "Sign In"}
+            </button>
           </form>
 
           <div className="mt-8">

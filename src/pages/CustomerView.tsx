@@ -248,7 +248,6 @@ export function CustomerView() {
         onClose={() => setIsModalOpen(false)}
         table={selectedTable}
       />
-<<<<<<< HEAD
     </div>
   );
 }

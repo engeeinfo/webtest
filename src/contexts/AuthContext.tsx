@@ -74,6 +74,72 @@ class SafeStorage {
 
 const storage = new SafeStorage();
 
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Check for existing session
+    try {
+      const storedUser = storage.getItem("user");
+      if (storedUser) {
+        const parsedUser = JSON.parse(storedUser);
+        // Clean up legacy guest sessions from localStorage
+        if (parsedUser.email === "guest@example.com") {
+          storage.removeItem("user");
+          sessionStorage.setItem("user", storedUser);
+        }
+        setUser(parsedUser);
+      } else {
+        // Check session storage for guest session
+        const sessionUser = sessionStorage.getItem("user");
+        if (sessionUser) {
+          setUser(JSON.parse(sessionUser));
+        }
+      }
+    } catch (error) {
+      console.error("Error loading user from storage:", error);
+    }
+    setLoading(false);
+  }, []);
+
+  const login = async (email: string, password: string): Promise<void> => {
+    try {
+      const response = await fetch(`${API_BASE}/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${publicAnonKey}`,
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      console.log("Login response status:", response.status);
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error("Login failed with error:", error);
+        throw new Error(error || "Login failed");
+      }
+
+      const userData = await response.json();
+      console.log("Login successful, user data:", userData);
+
+      // Save to storage first
+      try {
+        storage.setItem("user", JSON.stringify(userData));
+        console.log("User saved to storage");
+      } catch (error) {
+        console.error("Error saving user to storage:", error);
+      }
+
+      // Then update state (this will trigger navigation in Login component)
+      setUser(userData);
+      console.log("User state updated");
+    } catch (error) {
+      console.error("Login error:", error);
+      throw error;
+    }
   };
 
   const guestLogin = () => {

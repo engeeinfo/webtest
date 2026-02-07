@@ -12,9 +12,6 @@ import {
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-=======
-import { CopyrightFooter } from "../components/CopyrightFooter";
->>>>>>> ff40e0f079c428a1ab1e18f6e586876db6206689
 import { useAuth } from "../contexts/AuthContext";
 import { API_BASE, publicAnonKey } from "../utils/supabase/info";
 
@@ -612,7 +609,6 @@ export function OrderReview() {
           </div>
         </div>
       )}
-<<<<<<< HEAD
     </div>
   );
 }
