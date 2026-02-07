@@ -2,19 +2,21 @@ import { User, UtensilsCrossed } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { supabase } from "../lib/supabase";
+import { toast } from "sonner";
 
 export function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
   const { login, user, guestLogin } = useAuth();
   const navigate = useNavigate();
 
   // Navigate when user is set
   useEffect(() => {
     if (user) {
-      console.log("User logged in:", user);
       if (user.role === "admin") {
         navigate("/admin", { replace: true });
       } else if (user.role === "kitchen") {
@@ -31,11 +33,27 @@ export function Login() {
     setLoading(true);
 
     try {
-      await login(email, password);
+      if (isSignUp) {
+        const { error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+        if (signUpError) throw signUpError;
+        toast.success("Account created! You can now log in.");
+        setIsSignUp(false);
+      } else {
+        await login(email, password);
+      }
       // Navigation will happen via useEffect above
     } catch (err: any) {
-      console.error("Login failed:", err);
-      setError(err.message || "Login failed. Please try again.");
+      console.error("Auth failed:", err);
+      setError(
+        err.message ||
+          (isSignUp
+            ? "Sign up failed. Try again."
+            : "Login failed. Check your credentials.")
+      );
+    } finally {
       setLoading(false);
     }
   };
@@ -107,8 +125,29 @@ export function Login() {
               disabled={loading}
               className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-lg font-semibold hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50"
             >
-              {loading ? "Logging in..." : "Sign In"}
+              {loading
+                ? isSignUp
+                  ? "Creating Account..."
+                  : "Logging in..."
+                : isSignUp
+                  ? "Create Account"
+                  : "Sign In"}
             </button>
+
+            <div className="text-center mt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSignUp(!isSignUp);
+                  setError("");
+                }}
+                className="text-sm text-purple-200 hover:text-white underline outline-none"
+              >
+                {isSignUp
+                  ? "Already have an account? Sign In"
+                  : "Need an account? Sign Up"}
+              </button>
+            </div>
           </form>
 
           <div className="mt-8">
