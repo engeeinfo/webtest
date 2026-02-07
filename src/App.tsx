@@ -41,55 +41,55 @@ export default function App() {
     <AuthProvider>
       <Toaster position="top-center" richColors />
       <Routes>
-          <Route path="/login" element={<Login />} />
+        <Route path="/login" element={<Login />} />
 
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute allowedRoles={["admin"]}>
-                <AdminDashboard />
-              </ProtectedRoute>
-            }
-          />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
 
-          <Route
-            path="/kitchen"
-            element={
-              <ProtectedRoute allowedRoles={["kitchen", "admin"]}>
-                <KitchenDisplay />
-              </ProtectedRoute>
-            }
-          />
+        <Route
+          path="/kitchen"
+          element={
+            <ProtectedRoute allowedRoles={["kitchen", "admin"]}>
+              <KitchenDisplay />
+            </ProtectedRoute>
+          }
+        />
 
-          <Route
-            path="/customer"
-            element={
-              <ProtectedRoute allowedRoles={["customer", "waiter", "admin"]}>
-                <CustomerView />
-              </ProtectedRoute>
-            }
-          />
+        <Route
+          path="/customer"
+          element={
+            <ProtectedRoute allowedRoles={["customer", "waiter", "admin"]}>
+              <CustomerView />
+            </ProtectedRoute>
+          }
+        />
 
-          <Route
-            path="/menu/:tableId"
-            element={
-              <ProtectedRoute allowedRoles={["customer", "waiter", "admin"]}>
-                <MenuView />
-              </ProtectedRoute>
-            }
-          />
+        <Route
+          path="/menu/:tableId"
+          element={
+            <ProtectedRoute allowedRoles={["customer", "waiter", "admin"]}>
+              <MenuView />
+            </ProtectedRoute>
+          }
+        />
 
-          <Route
-            path="/order/:sessionId"
-            element={
-              <ProtectedRoute allowedRoles={["customer", "waiter", "admin"]}>
-                <OrderReview />
-              </ProtectedRoute>
-            }
-          />
+        <Route
+          path="/order/:sessionId"
+          element={
+            <ProtectedRoute allowedRoles={["customer", "waiter", "admin"]}>
+              <OrderReview />
+            </ProtectedRoute>
+          }
+        />
 
-          <Route path="/" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </AuthProvider>
+        <Route path="/" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </AuthProvider>
   );
 }
