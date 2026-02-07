@@ -39,11 +39,14 @@ export function AdminDashboard() {
   const fetchTables = async () => {
     try {
       const { data, error } = await supabase
-        .from('tables')
-        .select('*')
-        .order('number', { ascending: true });
+        .from("tables")
+        .select("*")
+        .order("number", { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase error detail:", error);
+        throw error;
+      };
 
       if (data) {
         // Map Supabase snake_case to frontend camelCase if necessary
@@ -52,13 +55,13 @@ export function AdminDashboard() {
           number: t.number,
           status: t.status,
           capacity: t.capacity,
-          sessionId: t.session_id || t.sessionId // Handle both cases
+          sessionId: t.session_id || t.sessionId, // Handle both cases
         }));
         setTables(mappedTables);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching tables:", error);
-      toast.error("Failed to fetch tables from database");
+      toast.error(`Failed to fetch tables: ${error.message || error.details || "Unknown error"}`);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -81,9 +84,9 @@ export function AdminDashboard() {
   const handleCompleteSession = async (tableId: string) => {
     try {
       const { error } = await supabase
-        .from('tables')
-        .update({ status: 'empty', session_id: null })
-        .eq('id', tableId);
+        .from("tables")
+        .update({ status: "empty", session_id: null })
+        .eq("id", tableId);
 
       if (!error) {
         fetchTables();
@@ -100,9 +103,9 @@ export function AdminDashboard() {
     try {
       const sessionId = `sess_${Date.now()}`;
       const { error } = await supabase
-        .from('tables')
-        .update({ status: 'occupied', session_id: sessionId })
-        .eq('id', tableId);
+        .from("tables")
+        .update({ status: "occupied", session_id: sessionId })
+        .eq("id", tableId);
 
       if (!error) {
         navigate(`/menu/${tableId}`);
@@ -121,9 +124,9 @@ export function AdminDashboard() {
   const handleReserveTable = async (tableId: string) => {
     try {
       const { error } = await supabase
-        .from('tables')
-        .update({ status: 'reserved' })
-        .eq('id', tableId);
+        .from("tables")
+        .update({ status: "reserved" })
+        .eq("id", tableId);
 
       if (!error) {
         fetchTables();
@@ -139,9 +142,9 @@ export function AdminDashboard() {
   const handleUnreserveTable = async (tableId: string) => {
     try {
       const { error } = await supabase
-        .from('tables')
-        .update({ status: 'empty' })
-        .eq('id', tableId);
+        .from("tables")
+        .update({ status: "empty" })
+        .eq("id", tableId);
 
       if (!error) {
         fetchTables();
@@ -150,9 +153,9 @@ export function AdminDashboard() {
         // If unreserve fails, try fallback
         console.log("Unreserve failed, trying fallback...");
         const { error: fallbackError } = await supabase
-          .from('tables')
-          .update({ status: 'empty', session_id: null })
-          .eq('id', tableId);
+          .from("tables")
+          .update({ status: "empty", session_id: null })
+          .eq("id", tableId);
 
         if (!fallbackError) {
           fetchTables();
@@ -184,11 +187,13 @@ export function AdminDashboard() {
     e.preventDefault();
     setAddingTable(true);
     try {
-      const { error } = await supabase.from('tables').insert([{
-        number: parseInt(newTableNumber),
-        capacity: parseInt(newTableCapacity),
-        status: 'empty'
-      }]);
+      const { error } = await supabase.from("tables").insert([
+        {
+          number: parseInt(newTableNumber),
+          capacity: parseInt(newTableCapacity),
+          status: "empty",
+        },
+      ]);
 
       if (!error) {
         setNewTableNumber("");
@@ -211,7 +216,10 @@ export function AdminDashboard() {
     if (!confirm("Are you sure you want to remove this table?")) return;
 
     try {
-      const { error } = await supabase.from('tables').delete().eq('id', tableId);
+      const { error } = await supabase
+        .from("tables")
+        .delete()
+        .eq("id", tableId);
 
       if (!error) {
         fetchTables();
