@@ -62,8 +62,6 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "server": "node server/index.js",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d dists"
+    "server": "node server/index.js"
   }
 }

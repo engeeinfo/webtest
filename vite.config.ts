@@ -3,7 +3,7 @@ import path from "path";
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  base: "/webhost/",
+  base: "/webtest/",
   plugins: [react()],
   resolve: {
     extensions: [".js", ".jsx", ".ts", ".tsx", ".json"],
@@ -53,7 +53,7 @@ export default defineConfig({
   },
   build: {
     target: "esnext",
-    outDir: "dists",
+    outDir: "docs",
   },
   server: {
     port: 3000,
