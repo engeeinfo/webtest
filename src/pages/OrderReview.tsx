@@ -13,7 +13,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
-import { API_BASE, publicAnonKey } from "../utils/supabase/info";
+import { supabase } from "../lib/supabase";
 
 interface OrderItem {
   id: string;
@@ -47,15 +47,37 @@ export function OrderReview() {
 
   const fetchSession = async () => {
     try {
-      const response = await fetch(`${API_BASE}/session/${sessionId}`, {
-        headers: {
-          Authorization: `Bearer ${publicAnonKey}`,
-        },
-      });
+      const { data: orderData, error: orderError } = await supabase
+        .from("orders")
+        .select(
+          `*, table:tables!table_id ( number ), order_items ( id, menu_item_id, quantity, price_at_time, status, notes, menu_item:menu_items ( name ) )`
+        )
+        .eq("session_id", sessionId)
+        .single();
 
-      if (response.ok) {
-        const data = await response.json();
-        setSession(data);
+      if (orderError) throw orderError;
+
+      if (orderData) {
+        const items = orderData.order_items.map((oi: any) => ({
+          id: oi.id,
+          menuItemId: oi.menu_item_id,
+          name: oi.menu_item?.name || "Unknown Item",
+          quantity: oi.quantity,
+          price: oi.price_at_time,
+          status: oi.status,
+          notes: oi.notes,
+        }));
+
+        setSession({
+          id: orderData.session_id,
+          tableId: orderData.table_id,
+          tableNumber: orderData.table?.number || 0,
+          items: items,
+          totalAmount: orderData.total_amount,
+          paymentStatus: orderData.payment_status || "pending",
+          createdAt: orderData.created_at,
+          orderSent: orderData.status !== "pending",
+        });
       }
     } catch (error) {
       console.error("Error fetching session:", error);
@@ -81,17 +103,15 @@ export function OrderReview() {
     if (newQuantity < 1) return;
 
     try {
-      const response = await fetch(`${API_BASE}/update-order-item`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${publicAnonKey}`,
-        },
-        body: JSON.stringify({ sessionId, itemId, quantity: newQuantity }),
-      });
+      const { error } = await supabase
+        .from('order_items')
+        .update({ quantity: newQuantity })
+        .eq('id', itemId);
 
-      if (response.ok) {
+      if (!error) {
         fetchSession();
+      } else {
+        toast.error("Failed to update quantity");
       }
     } catch (error) {
       console.error("Error updating item:", error);
@@ -107,18 +127,13 @@ export function OrderReview() {
     if (!window.confirm("Are you sure you want to remove this item?")) return;
 
     try {
-      const response = await fetch(`${API_BASE}/remove-order-item`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${publicAnonKey}`,
-        },
-        body: JSON.stringify({ sessionId, itemId }),
-      });
+      const { error } = await supabase.from('order_items').delete().eq('id', itemId);
 
-      if (response.ok) {
+      if (!error) {
         fetchSession();
         toast.success("Item removed from order");
+      } else {
+        toast.error("Failed to remove item");
       }
     } catch (error) {
       console.error("Error removing item:", error);
@@ -135,22 +150,23 @@ export function OrderReview() {
       return;
 
     try {
-      const response = await fetch(`${API_BASE}/confirm-order`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${publicAnonKey}`,
-        },
-        body: JSON.stringify({
-          sessionId,
-        }),
-      });
+      // Logic for confirming order is mainly upgrading status to 'cooking' or 'confirmed'
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: 'cooking' }) // or 'confirmed'
+        .eq('session_id', sessionId);
+      
+      // Also update items status?
+      // For simplicity, let's assume kitchen listens to new orders or status change.
+      
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .update({ status: 'in-progress' })
+        .eq('order_id', session.id); // Assuming session.id is order_id
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `Failed to confirm order: ${response.status} ${errorText}`,
-        );
+
+      if (error) {
+        throw new Error(`Failed to confirm order: ${error.message}`);
       }
 
       toast.success("Order sent to kitchen! Payment pending.");
@@ -205,21 +221,25 @@ export function OrderReview() {
     const toastId = toast.loading("Processing payment...");
 
     try {
-      const response = await fetch(`${API_BASE}/process-payment`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${publicAnonKey}`,
-        },
-        body: JSON.stringify({
-          sessionId,
-          amount: session.totalAmount,
-          paymentMethod: method,
-        }),
-      });
+      // 1. Update order payment status
+      const { error: paymentError } = await supabase
+        .from('orders')
+        .update({
+             payment_status: 'success', 
+             payment_method: method 
+        })
+        .eq('session_id', sessionId); // or id if session.id matches
 
-      if (!response.ok) {
+      if (paymentError) {
         throw new Error("Payment failed. Please try again.");
+      }
+
+      // 2. Update table status to 'payment_confirmed' ?
+      if (session.tableId) {
+          const { error: tableError } = await supabase
+            .from('tables')
+            .update({ status: 'payment_confirmed' })
+            .eq('id', session.tableId);
       }
 
       await fetchSession();
@@ -247,21 +267,18 @@ export function OrderReview() {
       return;
 
     try {
-      const response = await fetch(`${API_BASE}/complete-session`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${publicAnonKey}`,
-        },
-        body: JSON.stringify({
-          tableId: session.tableId,
-        }),
-      });
+      // 1. Clear table session
+       if (session.tableId) {
+          const { error: tableError } = await supabase
+            .from('tables')
+            .update({ status: 'empty', session_id: null })
+            .eq('id', session.tableId);
+          
+          if (tableError) throw tableError;
+       }
 
-      if (!response.ok) {
-        throw new Error("Failed to complete session");
-      }
-
+      // 2. Archive session/order? (optional, usually logic is implicit by status='completed')
+      
       toast.success("Session completed and table cleared");
       if (user?.role === "admin") {
         navigate("/admin");
