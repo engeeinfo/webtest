@@ -1,9 +1,9 @@
 import { User, UtensilsCrossed } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
-import { toast } from "sonner";
 
 export function Login() {
   const [email, setEmail] = useState("");
@@ -51,7 +51,7 @@ export function Login() {
         err.message ||
           (isSignUp
             ? "Sign up failed. Try again."
-            : "Login failed. Check your credentials.")
+            : "Login failed. Check your credentials."),
       );
     } finally {
       setLoading(false);
@@ -162,13 +162,21 @@ export function Login() {
               </div>
             </div>
 
-            <div className="mt-6">
+            <div className="mt-6 flex gap-3">
               <button
                 onClick={() => quickLogin("customer")}
-                className="w-full flex flex-col items-center gap-2 p-3 bg-white/5 hover:bg-white/10 border border-white/20 rounded-lg transition-all"
+                className="flex-1 flex flex-col items-center gap-2 p-3 bg-white/5 hover:bg-white/10 border border-white/20 rounded-lg transition-all"
               >
                 <User className="w-6 h-6 text-green-400" />
-                <span className="text-xs text-white">Guest Entry</span>
+                <span className="text-xs text-white">Guest Login</span>
+              </button>
+              
+              <button
+                onClick={() => navigate("/customer")}
+                className="flex-1 flex flex-col items-center gap-2 p-3 bg-white/5 hover:bg-white/10 border border-white/20 rounded-lg transition-all"
+              >
+                <UtensilsCrossed className="w-6 h-6 text-blue-400" />
+                <span className="text-xs text-white">View Tables Only</span>
               </button>
             </div>
           </div>

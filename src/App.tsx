@@ -62,16 +62,7 @@ export default function App() {
           }
         />
 
-        <Route
-          path="/customer"
-          element={
-            <ProtectedRoute allowedRoles={["customer", "waiter", "admin"]}>
-              <CustomerView />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
+          <Route path="/customer" element={<CustomerView />} />        <Route
           path="/menu/:tableId"
           element={
             <ProtectedRoute allowedRoles={["customer", "waiter", "admin"]}>
