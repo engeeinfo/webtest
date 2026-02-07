@@ -33,11 +33,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } = await supabase.auth.getSession();
 
         if (session && mounted) {
+          // Fallback roles based on email if metadata is missing
+          let role = session.user.user_metadata?.role;
+          if (!role) {
+            if (session.user.email === "admin@restaurant.com") role = "admin";
+            else if (session.user.email === "kitchen@restaurant.com")
+              role = "kitchen";
+            else role = "customer";
+          }
+
           setUser({
             id: session.user.id,
             email: session.user.email!,
             name: session.user.user_metadata?.name || "User",
-            role: session.user.user_metadata?.role || "customer",
+            role: role,
           });
         } else if (mounted) {
           // Fallback to guest session if no Auth session
@@ -60,11 +69,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
+        // Fallback roles based on email if metadata is missing
+        let role = session.user.user_metadata?.role;
+        if (!role) {
+          if (session.user.email === "admin@restaurant.com") role = "admin";
+          else if (session.user.email === "kitchen@restaurant.com")
+            role = "kitchen";
+          else role = "customer";
+        }
+
         setUser({
           id: session.user.id,
           email: session.user.email!,
           name: session.user.user_metadata?.name || "User",
-          role: session.user.user_metadata?.role || "customer",
+          role: role,
         });
         // Clear guest session if real user logs in
         sessionStorage.removeItem("guest_user");
